@@ -104,7 +104,6 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
 
   var WD = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
   var MO = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
-  var started = Date.now();
   function pad(n){ return (n<10?'0':'') + n; }
 
   function tick(first){
@@ -120,10 +119,6 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
       var hr = n.getHours(), a = NIGHT[0], b = NIGHT[1];
       var night = a > b ? (hr >= a || hr < b) : (hr >= a && hr < b);
       document.body.style.opacity = night ? DIM : 1;
-    }
-    // Einmal täglich um 03:30 neu laden (nach >20 h Laufzeit) – hält die Seite frisch
-    if (n.getHours() === 3 && n.getMinutes() === 30 && Date.now() - started > 20*3600e3 && navigator.onLine){
-      location.reload(); return;
     }
     setTimeout(function(){ tick(false); }, 1000 - n.getMilliseconds() + 10);
   }
