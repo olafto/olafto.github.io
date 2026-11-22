@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Klappuhr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0b; --card:#1f1f23; --card2:#1a1a1d; --fg:#f3f3f3; --seam:#0a0a0b; --muted:#7d7d85;
+  --h:min(58vh, 30vw);
+}
+body.with-sec{ --h:min(54vh, 23.5vw); }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);overflow:hidden}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--h)*.12);
+  font-family:'Oswald','Arial Narrow',Arial,sans-serif;color:var(--fg);
+  -webkit-user-select:none;user-select:none;cursor:none;transition:opacity 3s}
+.clock{display:flex;align-items:center}
+.group{display:flex;gap:calc(var(--h)*.05)}
+.group.sec{--h:calc(min(54vh, 23.5vw)*.42)}
+.colon{display:flex;flex-direction:column;gap:calc(var(--h)*.24);padding:0 calc(var(--h)*.09)}
+.colon.sec{--h:calc(min(54vh, 23.5vw)*.6)}
+.colon i{display:block;width:calc(var(--h)*.075);height:calc(var(--h)*.075);border-radius:50%;background:var(--muted)}
+.digit{position:relative;width:calc(var(--h)*.68);height:var(--h);perspective:calc(var(--h)*4);
+  font-size:calc(var(--h)*.84);font-weight:600;line-height:var(--h);text-align:center;
+  box-shadow:0 calc(var(--h)*.03) calc(var(--h)*.08) rgba(0,0,0,.6);border-radius:calc(var(--h)*.07)}
+.half,.flap{position:absolute;left:0;width:100%;height:50%;overflow:hidden;background:var(--card)}
+.upper{top:0;border-radius:calc(var(--h)*.07) calc(var(--h)*.07) 0 0}
+.lower{bottom:0;border-radius:0 0 calc(var(--h)*.07) calc(var(--h)*.07);background:var(--card2)}
+.half span,.flap span{position:absolute;left:0;width:100%;height:var(--h)}
+.upper span{top:0}
+.lower span{bottom:0}
+.digit::after{content:"";position:absolute;left:0;right:0;top:50%;height:max(2px,calc(var(--h)*.012));
+  transform:translateY(-50%);background:var(--seam);z-index:5}
+.flap{z-index:3;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.flap.upper{transform-origin:50% 100%}
+.flap.lower{transform-origin:50% 0;transform:rotateX(90deg)}
+.digit.go .flap.upper{animation:fu .28s ease-in forwards}
+.digit.go .flap.lower{animation:fl .28s ease-out .28s forwards}
+@keyframes fu{from{transform:rotateX(0);filter:brightness(1)}to{transform:rotateX(-90deg);filter:brightness(.55)}}
+@keyframes fl{from{transform:rotateX(90deg);filter:brightness(1.4)}to{transform:rotateX(0);filter:brightness(1)}}
+.date{font-size:calc(var(--h)*.15);letter-spacing:.06em;color:var(--muted);font-weight:600;text-transform:uppercase}
+.hint{position:fixed;bottom:4vh;left:0;right:0;text-align:center;font:500 2.4vh Arial,sans-serif;color:var(--muted);transition:opacity 1.5s}
+</style>
+</head>
+<body>
+<div class="clock" id="clock"></div>
+<div class="date" id="date"></div>
+<div class="hint" id="hint">Antippen = Vollbild an/aus</div>
+<script>
+(function(){
+  var P = new URLSearchParams(location.search);
+  var SHOW_SEC = P.get('sek') === '1';
+  var H12 = P.get('12h') === '1';
+  var SHOW_DATE = P.get('datum') !== '0';
+  var NIGHT = (P.get('nacht') || '').split('-').map(Number); // z.B. nacht=22-7
+  var DIM = parseFloat(P.get('dimm') || '0.35');
+
+  var clock = document.getElementById('clock');
+  var dateEl = document.getElementById('date');
+  if (!SHOW_DATE) dateEl.style.display = 'none';
+
+  function makeDigit(){
+    var d = document.createElement('div');
+    d.className = 'digit';
+    d.innerHTML = '<div class="half upper"><span></span></div><div class="half lower"><span></span></div>' +
+                  '<div class="flap upper"><span></span></div><div class="flap lower"><span></span></div>';
+    var s = d.querySelectorAll('span');
+    d._s = {up:s[0], lo:s[1], fu:s[2], fl:s[3]};
+    d._v = null;
+    return d;
+  }
+  function group(n, cls){
+    var g = document.createElement('div'); g.className = 'group ' + (cls||'');
+    var arr = [];
+    for (var i=0;i<n;i++){ var d = makeDigit(); g.appendChild(d); arr.push(d); }
+    clock.appendChild(g); return arr;
+  }
+  function colon(cls){
+    var c = document.createElement('div'); c.className = 'colon ' + (cls||'');
+    c.innerHTML = '<i></i><i></i>'; clock.appendChild(c);
+  }
+  function setDigit(d, v, animate){
+    if (d._v === v) return;
+    var o = d._v, s = d._s; d._v = v;
+    clearTimeout(d._t);
+    if (o === null || !animate || document.hidden){
+      s.up.textContent = s.lo.textContent = s.fu.textContent = s.fl.textContent = v;
+      d.classList.remove('go'); return;
+    }
+    d.classList.remove('go'); void d.offsetWidth;
+    s.up.textContent = v; s.lo.textContent = o; s.fu.textContent = o; s.fl.textContent = v;
+    d.classList.add('go');
+    d._t = setTimeout(function(){
+      s.lo.textContent = v; s.fu.textContent = v; d.classList.remove('go');
+    }, 620);
+  }
+
+  var hh = group(2); colon(); var mm = group(2); var ss = null;
+  if (SHOW_SEC){ document.body.classList.add('with-sec'); colon('sec'); ss = group(2,'sec'); }
+
+  var WD = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  var MO = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  var started = Date.now();
+  function pad(n){ return (n<10?'0':'') + n; }
+
+  function tick(first){
+    var n = new Date();
+    var h = n.getHours(); if (H12) h = (h % 12) || 12;
+    var H = pad(h), M = pad(n.getMinutes()), S = pad(n.getSeconds());
+    setDigit(hh[0], H[0], !first); setDigit(hh[1], H[1], !first);
+    setDigit(mm[0], M[0], !first); setDigit(mm[1], M[1], !first);
+    if (ss){ setDigit(ss[0], S[0], !first); setDigit(ss[1], S[1], !first); }
+    if (SHOW_DATE) dateEl.textContent = WD[n.getDay()] + ', ' + n.getDate() + '. ' + MO[n.getMonth()] + ' ' + n.getFullYear();
+
+    if (NIGHT.length === 2 && !isNaN(NIGHT[0]) && !isNaN(NIGHT[1])){
+      var hr = n.getHours(), a = NIGHT[0], b = NIGHT[1];
+      var night = a > b ? (hr >= a || hr < b) : (hr >= a && hr < b);
+      document.body.style.opacity = night ? DIM : 1;
+    }
+    // Einmal täglich um 03:30 neu laden (nach >20 h Laufzeit) – hält die Seite frisch
+    if (n.getHours() === 3 && n.getMinutes() === 30 && Date.now() - started > 20*3600e3 && navigator.onLine){
+      location.reload(); return;
+    }
+    setTimeout(function(){ tick(false); }, 1000 - n.getMilliseconds() + 10);
+  }
+  tick(true);
+
+  // Bildschirm wachhalten, wo der Browser es unterstützt
+  function wake(){ try { if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){}); } catch(e){} }
+  wake();
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) wake(); });
+
+  // Antippen = Vollbild umschalten
+  document.addEventListener('click', function(){
+    var el = document.documentElement;
+    var fs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fs){ var r = el.requestFullscreen || el.webkitRequestFullscreen; if (r) try { r.call(el); } catch(e){} }
+    else { var x = document.exitFullscreen || document.webkitExitFullscreen; if (x) try { x.call(document); } catch(e){} }
+    wake();
+  });
+  var hint = document.getElementById('hint');
+  setTimeout(function(){ hint.style.opacity = 0; }, 6000);
+})();
+</script>
+</body>
+</html>
